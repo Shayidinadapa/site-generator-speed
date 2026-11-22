@@ -8,13 +8,12 @@ const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 // ---- text helpers ----
 
-const ESC_RE = /[&<>"']/;
 function esc(s) {
-  // HTML escaping: & < > " ' and nothing else. Fast path when there is
-  // nothing to escape (the common case for body text).
-  if (!ESC_RE.test(s)) return s;
+  // HTML escaping: & < > " ' and nothing else. One pass: scan and escape
+  // in a single loop; return s unchanged when nothing needs escaping.
   let out = '';
   let start = 0;
+  let found = false;
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
     let rep = null;
@@ -24,11 +23,12 @@ function esc(s) {
     else if (c === 34) rep = '&quot;';
     else if (c === 39) rep = '&#39;';
     if (rep !== null) {
+      found = true;
       out += s.slice(start, i) + rep;
       start = i + 1;
     }
   }
-  return out + s.slice(start);
+  return found ? out + s.slice(start) : s;
 }
 
 const slugCache = new Map();
@@ -1072,7 +1072,8 @@ export function run(input) {
   for (const f of files) {
     const p = f.path;
     if (p.endsWith('.md')) {
-      const content = f.content.replace(/\r\n?/g, '\n');
+      // CRLF/CR normalisation, skipped when the file has no '\r' (the norm).
+      const content = f.content.indexOf('\r') === -1 ? f.content : f.content.replace(/\r\n?/g, '\n');
       const r = parseFrontMatter(content);
       if (r.error) {
         report.push('refused ' + p + ': ' + r.error);
